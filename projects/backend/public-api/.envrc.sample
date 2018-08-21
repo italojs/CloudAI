@@ -1,0 +1,5 @@
+export AUTH_JWKS_URI=http://localhost:5031/.well-known/jwks.json
+export AUTHORITY_AUDIENCE_URN=urn:app:intcad-api
+export ISSUER_AUTHORITY_NAME=sso.mantris.com.br
+export STORAGE_URL=http://localhost:3000/
+export HEALTH_PING_API_URL=http://localhost:3000/

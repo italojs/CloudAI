@@ -1,0 +1,39 @@
+{
+  "name": "public-api",
+  "contributors": [
+    "Caio Delgado <caiodelgado.csd@gmail.com>",
+    "Italo <italo.i@live.com>"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": [
+    "node >= 10.1.0",
+    "npm >= 6.0.1",
+    "pnpm >= 2.0.0"
+  ],
+  "scripts": {
+    "lint": "standard --global after --global afterEach --global before --global beforeEach --global describe --global it",
+    "test": "mocha test --async-only --check-leaks --full-trace --recursive --throw-deprecation",
+    "start:debug": "DEBUG=appify:*,public-api:* node bin/www",
+    "start": "node bin/www"
+  },
+  "dependencies": {
+    "@mantris/appify": "^0.7.2",
+    "@mantris/proxy": "^1.3.0",
+    "axios": "^0.18.0",
+    "cors": "^2.8.4",
+    "express-rescue": "^1.0.11",
+    "form-data": "^2.3.2",
+    "multer": "^1.3.0",
+    "query-string": "^5.1.0",
+    "sugar-env": "^1.4.0"
+  },
+  "devDependencies": {
+    "axiosist": "^0.1.0",
+    "chai": "^4.1.2",
+    "lodash.merge": "^4.6.1",
+    "mocha": "^5.0.5",
+    "nock": "^9.2.3",
+    "standard": "^10.0.3"
+  }
+}

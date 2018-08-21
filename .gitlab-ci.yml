@@ -1,0 +1,1146 @@
+image: node:10.1-alpine
+
+stages:
+  - check
+  - warmup
+  - test
+  - build
+  - review
+  - staging
+  - canary
+  - production
+  - actions
+
+variables:
+  HELM_VERSION: 2.9.0
+  KUBERNETES_VERSION: 1.9.7
+
+.cache-id-paths: &cache-id-paths
+  - .pnpm-store/
+  - projects/id/backend/api
+  - projects/id/backend/microservices/connector-admin
+  - projects/id/backend/microservices/krypton
+  - projects/id/backend/microservices/mailer
+  - projects/id/backend/microservices/profile-lookup
+  - projects/id/backend/microservices/token-issuer
+  - projects/id/backend/services/id
+
+.cache-intcad-paths: &cache-intcad-paths
+  - .pnpm-store/
+  - projects/intcad/backend/api
+  - projects/intcad/backend/microservices/banks
+  - projects/intcad/backend/microservices/exams-amb
+  - projects/intcad/backend/microservices/exams-cbhpm
+  - projects/intcad/backend/microservices/exams-tuss
+  - projects/intcad/backend/microservices/states-cities
+  - projects/intcad/backend/services/client
+  - projects/intcad/backend/services/exams
+  - projects/intcad/backend/services/provider
+
+.cache-id: &with-id-cache
+  cache:
+    key: id
+    paths: *cache-id-paths
+    policy: pull
+
+.cache-id-push: &with-id-cache-push
+  cache:
+    key: id
+    paths: *cache-id-paths
+    policy: pull-push
+
+.cache-intcad: &with-intcad-cache
+  cache:
+    key: intcad
+    paths: *cache-intcad-paths
+    policy: pull
+
+.cache-intcad-push: &with-intcad-cache-push
+  cache:
+    key: intcad
+    paths: *cache-intcad-paths
+    policy: pull-push
+
+check:helm:
+  stage: check
+  image: alpine
+  script:
+    - setup_dependencies
+    - setup_helm
+    - nsr helm lint .devops/k8s/corekit/
+    - nsr helm lint .devops/k8s/lets-encrypt/
+    - nsr helm lint .devops/k8s/minio/
+  only:
+    - branches
+
+# Should be enabled when we managed to make s3 cache works with Gitlab runner's
+# Kubernetes executor.
+# ==============================================================================
+#
+# warmup:id-cache:
+#   <<: *with-id-cache-push
+#   stage: warmup
+#   script:
+#     - setup_pnpm
+#     - cd projects/id
+#     - apk add --no-cache g++ gcc make python
+#     - nsr pnpm recursive install
+#     - cd frontend
+#     - nsr npm install
+#
+# warmup:intcad-cache:
+#   <<: *with-intcad-cache-push
+#   stage: warmup
+#   script:
+#     - setup_pnpm
+#     - cd projects/intcad
+#     - nsr pnpm recursive install
+#     - cd frontend
+#     - nsr npm install
+
+test:id-ms-connector-admin:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/microservices/connector-admin
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-ms-krypton:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/microservices/krypton
+    - apk add --no-cache g++ gcc make python
+    - nsr pnpm install
+    - nsr pnpm rebuild bcrypt --build-from-source
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-ms-mailer:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/microservices/mailer
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-ms-profile-lookup:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/microservices/profile-lookup
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-ms-token-issuer:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/microservices/token-issuer
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-svc-id:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/services/id
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-api:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/id/backend/api
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:id-frontend:
+  <<: *with-id-cache
+  stage: test
+  script:
+    - cd projects/id/frontend
+    - nsr npm install
+    - nsr npm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-ms-banks:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/banks
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-ms-exams-amb:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/exams-amb
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:intcad-ms-exams-cbhpm:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/exams-cbhpm
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:intcad-ms-exams-tuss:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/exams-tuss
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:intcad-ms-states-cities:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/states-cities
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-svc-client:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/services/client
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:intcad-svc-exams:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/services/exams
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+
+test:intcad-svc-provider:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/services/provider
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-ms-storage:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/microservices/storage
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-api:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - setup_pnpm
+    - cd projects/intcad/backend/api
+    - nsr pnpm install
+    - nsr pnpm run lint
+    - nsr pnpm test
+  only:
+    - branches
+  allow_failure: true
+
+test:intcad-frontend:
+  <<: *with-intcad-cache
+  stage: test
+  script:
+    - cd projects/intcad/frontend
+    - nsr npm install
+    - nsr npm test
+  only:
+    - branches
+  allow_failure: true
+
+build:id-ms-connector-admin:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id ms-connector-admin) projects/id/backend/microservices/connector-admin
+    - docker push $(docker_image id ms-connector-admin)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-ms-krypton:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id ms-krypton) projects/id/backend/microservices/krypton
+    - docker push $(docker_image id ms-krypton)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-ms-mailer:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id ms-mailer) projects/id/backend/microservices/mailer
+    - docker push $(docker_image id ms-mailer)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-ms-profile-lookup:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id ms-profile-lookup) projects/id/backend/microservices/profile-lookup
+    - docker push $(docker_image id ms-profile-lookup)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-ms-token-issuer:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id ms-token-issuer) projects/id/backend/microservices/token-issuer
+    - docker push $(docker_image id ms-token-issuer)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-svc-id:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id svc-id) projects/id/backend/services/id
+    - docker push $(docker_image id svc-id)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-api:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id api) projects/id/backend/api
+    - docker push $(docker_image id api)
+  only:
+    - master
+    - /^release-.*$/
+
+build:id-frontend:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image id frontend) projects/id/frontend
+    - docker push $(docker_image id frontend)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-banks:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-banks) projects/intcad/backend/microservices/banks
+    - docker push $(docker_image intcad ms-banks)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-exams-amb:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-exams-amb) projects/intcad/backend/microservices/exams-amb
+    - docker push $(docker_image intcad ms-exams-amb)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-exams-cbhpm:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-exams-cbhpm) projects/intcad/backend/microservices/exams-cbhpm
+    - docker push $(docker_image intcad ms-exams-cbhpm)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-exams-tuss:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-exams-tuss) projects/intcad/backend/microservices/exams-tuss
+    - docker push $(docker_image intcad ms-exams-tuss)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-states-cities:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-states-cities) projects/intcad/backend/microservices/states-cities
+    - docker push $(docker_image intcad ms-states-cities)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-svc-client:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad svc-client) projects/intcad/backend/services/client
+    - docker push $(docker_image intcad svc-client)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-svc-exams:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad svc-exams) projects/intcad/backend/services/exams
+    - docker push $(docker_image intcad svc-exams)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-svc-provider:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad svc-provider) projects/intcad/backend/services/provider
+    - docker push $(docker_image intcad svc-provider)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-ms-storage:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad ms-storage) projects/intcad/backend/microservices/storage
+    - docker push $(docker_image intcad ms-storage)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-api:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad api) projects/intcad/backend/api
+    - docker push $(docker_image intcad api)
+  only:
+    - master
+    - /^release-.*$/
+
+build:intcad-frontend:
+  stage: build
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - setup_docker
+    - docker build -t $(docker_image intcad frontend) projects/intcad/frontend
+    - docker push $(docker_image intcad frontend)
+  only:
+    - master
+    - /^release-.*$/
+
+deploy:review:
+  stage: review
+  image: alpine
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - ensure_namespace
+    - setup_cert_manager
+    - create_token_issuer_secret
+    - deploy
+    - persist_environment_url
+  environment:
+    name: review/${CI_COMMIT_REF_NAME}
+    url: https://id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}
+    on_stop: destroy:review
+  artifacts:
+    paths:
+      - environment_url.txt
+  only:
+    refs:
+      - /^release-.*$/
+    kubernetes: active
+
+deploy:staging:
+  stage: staging
+  image: alpine
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - ensure_namespace
+    - setup_cert_manager
+    - create_token_issuer_secret
+    - deploy
+    - persist_environment_url
+  environment:
+    name: staging
+    url: https://api.id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}
+  artifacts:
+    paths:
+      - environment_url.txt
+  only:
+    refs:
+      - master
+    kubernetes: active
+
+deploy:canary:
+  stage: canary
+  image: alpine
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - ensure_namespace
+    - setup_cert_manager
+    - create_token_issuer_secret
+    - deploy canary
+    - persist_environment_url
+  environment:
+    name: production
+    url: https://api.id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}
+  artifacts:
+    paths:
+      - environment_url.txt
+  when: manual
+  only:
+    refs:
+      - master
+    kubernetes: active
+
+deploy:prod:
+  stage: production
+  image: alpine
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - ensure_namespace
+    - setup_cert_manager
+    - create_token_issuer_secret
+    - deploy
+    - persist_environment_url
+  environment:
+    name: production
+    url: https://api.id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}
+  artifacts:
+    paths:
+      - environment_url.txt
+  when: manual
+  only:
+    refs:
+      - master
+    kubernetes: active
+
+destroy:review:
+  stage: actions
+  image: alpine
+  variables:
+    GIT_STRATEGY: none
+  dependencies:
+    - deploy:review
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - delete
+  environment:
+    name: review/${CI_COMMIT_REF_NAME}
+    action: stop
+  when: manual
+  only:
+    refs:
+      - /^release-.*$/
+    kubernetes: active
+  allow_failure: true
+
+rollback:staging:
+  stage: actions
+  image: alpine
+  variables:
+    GIT_STRATEGY: none
+  dependencies:
+    - deploy:staging
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - rollback
+  environment:
+    name: staging
+  when: manual
+  only:
+    refs:
+      - master
+    kubernetes: active
+
+destroy:canary:
+  stage: actions
+  image: alpine
+  dependencies:
+    - deploy:canary
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - delete canary
+  environment:
+    name: production
+    action: stop
+  when: manual
+  only:
+    refs:
+      - master
+    kubernetes: active
+  allow_failure: true
+
+rollback:prod:
+  stage: actions
+  image: alpine
+  variables:
+    GIT_STRATEGY: none
+  dependencies:
+    - deploy:prod
+  script:
+    - setup_dependencies
+    - setup_kubectl
+    - setup_helm
+    - setup_tiller
+    - rollback
+  environment:
+    name: production
+  when: manual
+  only:
+    refs:
+      - master
+    kubernetes: active
+
+.helpers: &helpers |
+  # ==========================================================================
+  # nsr (pronounced as "ensure"):
+  #   For some reason, failed scripts aren't been captured as failure by
+  #   gitlab runner, resulting in successful jobs.
+  #   This little function "ensures" the job's right outcome.
+  # ==========================================================================
+  function nsr () {
+    "$@"
+    if [[ $? -ne 0 ]]; then exit 1; fi
+  }
+  # ============================================================================
+  # env_get:
+  #   Get an environment variable value from its name.
+  # ============================================================================
+  function env_get () {
+    VALUE="$(eval echo \"\$${1}\")"
+
+    if [[ -z "${VALUE}" ]]; then
+      echo "${2}"
+      return 0
+    fi
+
+    echo "${VALUE}"
+  }
+
+.pnpm: &pnpm |
+  # ==========================================================================
+  # setup_pnpm:
+  #   Install pnpm and configure its .pnpm-store directory.
+  # ==========================================================================
+  function setup_pnpm () {
+    export PATH="./node_modules/.bin:$PATH"
+    npm i -g pnpm
+    npm config set store "/builds/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}/.pnpm-store"
+  }
+
+.devops: &devops |
+  [[ "${TRACE}" ]] && set -x
+  # ==========================================================================
+  # version:
+  #   Generates ther version which should be used for builds.
+  # ==========================================================================
+  function version () {
+    if [[ "${CI_COMMIT_REF_NAME}" != "master" ]]; then
+      echo "${CI_COMMIT_SHA}"
+      return 0
+    fi
+
+    echo "$(date +%y).$(date +%m).${CI_PIPELINE_ID}"
+  }
+  # ==========================================================================
+  # docker_repository:
+  #   Defines the docker repository for a given subproject.
+  # ==========================================================================
+  function docker_repository () {
+    echo "gcr.io/${GCLOUD_PROJECT_ID}/${CI_PROJECT_NAME}-${1}-${2}"
+  }
+  # ==========================================================================
+  # docker_image:
+  #   Defines the docker repository:tag to be used when building a given
+  #   subproject.
+  # ==========================================================================
+  function docker_image () {
+    echo "$(docker_repository $1 $2):$(version)"
+  }
+  # ==========================================================================
+  # release_name:
+  #   Dfines the release name based on the current environment name and its
+  #   track.
+  # ==========================================================================
+  function release_name () {
+    TRACK="${1}"
+    NAME="${CI_ENVIRONMENT_SLUG}"
+
+    if [[ "$TRACK" != 'stable' ]]; then
+      NAME="${NAME}-${TRACK}"
+    fi
+
+    echo "${NAME}"
+  }
+  # ==========================================================================
+  # setup_docker:
+  #   Setup docker host and logs into gitlab registry.
+  # ==========================================================================
+  function setup_docker () {
+    if ! docker info &>/dev/null; then
+      if [ -z "${DOCKER_HOST}" -a "${KUBERNETES_PORT}" ]; then
+        export DOCKER_HOST='tcp://localhost:2375'
+      fi
+    fi
+
+    echo "${GCLOUD_CONTAINER_REGISTRY_PUSH_KEY}" | base64 -d | docker login -u _json_key --password-stdin https://gcr.io
+  }
+  # ==========================================================================
+  # setup_dependencies:
+  #   Installs system dependencies.
+  # ==========================================================================
+  function setup_dependencies () {
+    apk add --no-cache openssl openssh-client curl tar gzip bash ca-certificates git
+    wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub
+    wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-2.23-r3.apk
+    apk add glibc-2.23-r3.apk
+    rm glibc-2.23-r3.apk
+  }
+  # ==========================================================================
+  # setup_kubectl:
+  #   Installs kubectl.
+  # ==========================================================================
+  function setup_kubectl () {
+    curl -L -o /usr/bin/kubectl "https://storage.googleapis.com/kubernetes-release/release/v${KUBERNETES_VERSION}/bin/linux/amd64/kubectl"
+    chmod +x /usr/bin/kubectl
+
+    kubectl version --client
+  }
+  # ==========================================================================
+  # setup_helm:
+  #   Installs helm.
+  # ==========================================================================
+  function setup_helm () {
+    curl "https://kubernetes-helm.storage.googleapis.com/helm-v${HELM_VERSION}-linux-amd64.tar.gz" | tar zx
+    mv linux-amd64/helm /usr/bin/
+
+    helm init --client-only
+    helm version --client
+  }
+  # ==========================================================================
+  # setup_tiller:
+  #   Installs helm tiller.
+  # ==========================================================================
+  function setup_tiller () {
+    helm init --upgrade
+    helm version --server
+  }
+  # ==========================================================================
+  # ensure_namespace:
+  #   Ensures the kubernetes namespace exists.
+  # ==========================================================================
+  function ensure_namespace () {
+    kubectl describe namespace "${KUBE_NAMESPACE}" || kubectl create namespace "${KUBE_NAMESPACE}"
+  }
+  # ==========================================================================
+  # setup_cert_manager:
+  #   Setting up cert manager.
+  #   See: https://cert-manager.readthedocs.io/en/latest/index.html
+  # ==========================================================================
+  function setup_cert_manager () {
+    echo "Setting up Cert Manager..."
+
+    if [[ -z "$(helm ls -q cert-manager)" ]]; then
+      echo "Installing..."
+      helm upgrade \
+        --install \
+        --wait \
+        --set ingressShim.extraArgs='{--default-issuer-name=letsencrypt-prod,--default-issuer-kind=ClusterIssuer}' \
+        --namespace kube-system \
+        cert-manager \
+        stable/cert-manager
+    else
+      echo "Already installed, skiped."
+    fi
+
+    echo "Setting up Let's Encrypt cluster issuers..."
+    helm upgrade \
+      --install \
+      --wait \
+      --set email="${IT_SERVICES_EMAIL}" \
+      --namespace kube-system \
+      lets-encrypt \
+      .devops/k8s/lets-encrypt/
+  }
+  # ==========================================================================
+  # create_token_issuer_secret:
+  #   Creates the private key used to sign tokens JWT.
+  # ==========================================================================
+  function create_token_issuer_secret () {
+    echo "Creating JWT secret..."
+
+    KEY_NAME="id-token-issuer-${CI_ENVIRONMENT_SLUG}"
+
+    if [[ -n "$(kubectl describe --namespace="${KUBE_NAMESPACE}" secret "${KEY_NAME}" 2>/dev/null)" ]]; then
+      echo "Already exists, skiped."
+      return 0
+    fi
+
+    ssh-keygen -t rsa -b 2048 -N '' -f "${KEY_NAME}.key"
+
+    PRIVATE_KEY=$(cat "${KEY_NAME}.key" | base64 | tr -d \\n)
+    PUBLIC_KEY=$(cat "${KEY_NAME}.key.pub" | base64 | tr -d \\n)
+
+    kubectl create secret generic "${KEY_NAME}" \
+      --namespace "${KUBE_NAMESPACE}" \
+      --from-literal="key='${PRIVATE_KEY}'" \
+      --from-literal="pub='${PUBLIC_KEY}'"
+  }
+  # ==========================================================================
+  # deploy:
+  #   Deploy helm package to kubernetes.
+  # ==========================================================================
+  function deploy () {
+    TRACK="${1-stable}"
+    NAME="$(release_name ${TRACK})"
+
+    ENV="$(echo ${CI_ENVIRONMENT_NAME%%/$CI_COMMIT_REF_NAME} | tr -s  '[:upper:]'  '[:lower:]')"
+    ENV_UPPERCASE="$(echo ${ENV} | tr -s  '[:lower:]'  '[:upper:]')"
+
+    MINIO_ENDPOINT="https://minio.${AUTO_DEVOPS_DOMAIN}/"
+    ID_MS_TOKEN_ISSUER_PRIVATE_KEY_SECRET_NAME="id-token-issuer-${CI_ENVIRONMENT_SLUG}"
+
+    ID_MONGODB_DBNAME="$(env_get ${ENV_UPPERCASE}_ID_MONGODB_DBNAME "${CI_ENVIRONMENT_SLUG}-id")"
+    ID_MONGODB_URI="$(env_get ${ENV_UPPERCASE}_ID_MONGODB_URI "mongodb://mongodb:27017/${ID_MONGODB_DBNAME}")"
+    INTCAD_MONGODB_DBNAME="$(env_get ${ENV_UPPERCASE}_INTCAD_MONGODB_DBNAME "${CI_ENVIRONMENT_SLUG}-intcad")"
+    INTCAD_MONGODB_URI="$(env_get ${ENV_UPPERCASE}_INTCAD_MONGODB_URI "mongodb://mongodb:27017/${INTCAD_MONGODB_DBNAME}")"
+
+    # Horizontal Pod Autoscaling defaults
+    HPA_DEFAULT_MIN="${HPA_DEFAULT_MIN:-1}"
+    HPA_DEFAULT_MAX="${HPA_DEFAULT_MAX:-5}"
+
+    helm upgrade \
+      --install \
+      --wait \
+      --timeout 600 \
+      --set global.project="${CI_PROJECT_NAME}" \
+      --set global.domain="${AUTO_DEVOPS_DOMAIN}" \
+      --set global.env.name="${ENV}" \
+      --set global.env.slug="${CI_ENVIRONMENT_SLUG}" \
+      --set global.env.track="${TRACK}" \
+      --set global.image.registry="gcr.io/${GCLOUD_PROJECT_ID}" \
+      --set global.image.version="$(version)" \
+      --set global.rollingUpdate.maxSurge="$(env_get ${ENV_UPPERCASE}_ROLLING_UPDATED_MAX_SURGE '30%')" \
+      --set global.rollingUpdate.maxUnavailable="$(env_get ${ENV_UPPERCASE}_ROLLING_UPDATED_MAX_UNAVAILABLE '30%')" \
+      --set global.vars.AUTHORITY_ISSUER_URN="urn:authority:id:env:${CI_ENVIRONMENT_SLUG}" \
+      --set global.vars.DEEPTRACE_DSN="${DEEPTRACE_DSN}" \
+      --set global.vars.DEEPTRACE_TIMEOUT="${DEEPTRACE_TIMEOUT}" \
+      --set global.vars.DEFAULT_INTERNAL_REQUESTS_TIMEOUT="$(env_get ${ENV_UPPERCASE}_INTERNAL_REQUESTS_TIMEOUT ${DEFAULT_INTERNAL_REQUESTS_TIMEOUT})" \
+      --set global.vars.GIT_COMMIT="${CI_COMMIT_SHA}" \
+      --set global.vars.GIT_RELEASE="$(version)" \
+      --set global.vars.NODE_ENV="${ENV}" \
+      --set global.vars.SENTRY_DSN="${SENTRY_DSN}" \
+      --set global.vars.SENTRY_TIMEOUT="${SENTRY_TIMEOUT}" \
+      --set global.apps.id.api.vars.MONGODB_DBNAME="${ID_MONGODB_DBNAME}" \
+      --set global.apps.id.api.vars.MONGODB_URI="${ID_MONGODB_URI}" \
+      --set global.apps.id.frontend.vars.API_ID_URL="$(env_get ${ENV_UPPERCASE}_ID_FRONTEND_API_ID_URL "https://api.id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}")" \
+      --set global.apps.id.frontend.vars.API_TIMEOUT="$(env_get ${ENV_UPPERCASE}_ID_FRONTEND_API_TIMEOUT 15000)" \
+      --set global.apps.id.svcId.vars.MONGODB_DBNAME="${ID_MONGODB_DBNAME}" \
+      --set global.apps.id.svcId.vars.MONGODB_URI="${ID_MONGODB_URI}" \
+      --set global.apps.id.msMailer.vars.EVENTS_CHALLENGE_REQUESTED_TEMPLATE_ID="${ID_MS_MAILER_EVENTS_CHALLENGE_REQUESTED_TEMPLATE_ID}" \
+      --set global.apps.id.msMailer.vars.MAILER_SENDER_EMAIL="${ID_MS_MAILER_SENDER_EMAIL}" \
+      --set global.apps.id.msMailer.vars.MAILER_SENDER_NAME="${ID_MS_MAILER_SENDER_NAME}" \
+      --set global.apps.id.msMailer.vars.SENDGRID_API_KEY="${ID_MS_MAILER_SENDGRID_API_KEY}" \
+      --set global.apps.id.msKrypton.vars.BCRYPT_ROUNDS="$(env_get BCRYPT_ROUNDS 10)" \
+      --set global.apps.id.msTokenIssuer.vars.PRIVATE_KEY_SECRET_NAME="${ID_MS_TOKEN_ISSUER_PRIVATE_KEY_SECRET_NAME}" \
+      --set global.apps.intcad.api.vars.AUTHORITY_AUDIENCE_URN="urn:apps:intcad" \
+      --set global.apps.intcad.api.vars.MULTER_FILE_SIZE="$(env_get ${ENV_UPPERCASE}_INTCAD_API_MULTER_FILE_SIZE ${DEFAULT_INTCAD_API_MULTER_FILE_SIZE})" \
+      --set global.apps.intcad.frontend.vars.API_ID_URL="$(env_get ${ENV_UPPERCASE}_INTCAD_FRONTEND_API_ID_URL "https://api.id.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}")" \
+      --set global.apps.intcad.frontend.vars.API_INTCAD_URL="$(env_get ${ENV_UPPERCASE}_INTCAD_FRONTEND_API_INTCAD_URL "https://api.intcad.${CI_ENVIRONMENT_SLUG}.${CI_PROJECT_NAME}.${AUTO_DEVOPS_DOMAIN}")" \
+      --set global.apps.intcad.frontend.vars.API_TIMEOUT="$(env_get ${ENV_UPPERCASE}_INTCAD_FRONTEND_API_TIMEOUT 15000)" \
+      --set global.apps.intcad.svcClient.vars.MONGODB_DBNAME="${INTCAD_MONGODB_DBNAME}" \
+      --set global.apps.intcad.svcClient.vars.MONGODB_URI="${INTCAD_MONGODB_URI}" \
+      --set global.apps.intcad.svcExams.vars.MONGODB_DBNAME="${INTCAD_MONGODB_DBNAME}" \
+      --set global.apps.intcad.svcExams.vars.MONGODB_URI="${INTCAD_MONGODB_URI}" \
+      --set global.apps.intcad.svcProvider.vars.MONGODB_DBNAME="${INTCAD_MONGODB_DBNAME}" \
+      --set global.apps.intcad.svcProvider.vars.MONGODB_URI="${INTCAD_MONGODB_URI}" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_BUCKET="$(env_get ${ENV_UPPERCASE}_INTCAD_MS_STORAGE_STORAGE_BUCKET)" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_CREDENTIALS_ACCESS_KEY_ID="$(env_get ${ENV_UPPERCASE}_INTCAD_MS_STORAGE_STORAGE_CREDENTIALS_ACCESS_KEY_ID ${DEFAULT_INTCAD_MS_STORAGE_STORAGE_CREDENTIALS_ACCESS_KEY_ID})" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_CREDENTIALS_ENDPOINT="${MINIO_ENDPOINT}" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_CREDENTIALS_SECRET_ACCESS_KEY="$(env_get ${ENV_UPPERCASE}_INTCAD_MS_STORAGE_STORAGE_CREDENTIALS_SECRET_ACCESS_KEY ${DEFAULT_INTCAD_MS_STORAGE_STORAGE_CREDENTIALS_SECRET_ACCESS_KEY})" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_SIGNED_URL_TTL="$(env_get ${ENV_UPPERCASE}_INTCAD_MS_STORAGE_STORAGE_SIGNED_URL_TTL ${DEFAULT_INTCAD_MS_STORAGE_STORAGE_SIGNED_URL_TTL})" \
+      --set global.apps.intcad.msStorage.vars.STORAGE_UPLOAD_SIZE_LIMIT="$(env_get ${ENV_UPPERCASE}_INTCAD_MS_STORAGE_STORAGE_UPLOAD_SIZE_LIMIT ${DEFAULT_INTCAD_MS_STORAGE_STORAGE_UPLOAD_SIZE_LIMIT})" \
+      --set global.apps.id.api.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_API_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.api.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_API_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.frontend.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_FRONTEND_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.frontend.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_FRONTEND_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.msConnectorAdmin.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_CONNECTOR_ADMIN_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.msConnectorAdmin.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_CONNECTOR_ADMIN_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.msKrypton.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_KRYPTON_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.msKrypton.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_KRYPTON_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.msMailer.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_MAILER_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.msMailer.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_MAILER_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.msProfileLookup.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_PROFILE_LOOKUP_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.msProfileLookup.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_PROFILE_LOOKUP_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.msTokenIssuer.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_TOKEN_ISSUER_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.msTokenIssuer.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_MS_TOKEN_ISSUER_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.id.srvId.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_ID_SRV_ID_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.id.srvId.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_ID_SRV_ID_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.api.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_API_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.api.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_API_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.frontend.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_FRONTEND_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.frontend.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_FRONTEND_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.svcClient.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_CLIENT_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.svcClient.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_CLIENT_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.svcExams.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_EXAMS_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.svcExams.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_EXAMS_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.svcProvider.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_PROVIDER_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.svcProvider.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_SVC_PROVIDER_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msBanks.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_BANKS_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msBanks.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_BANKS_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msExamsAmb.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_AMB_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msExamsAmb.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_AMB_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msExamsCbhpm.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_CBHPM_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msExamsCbhpm.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_CBHPM_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msExamsTuss.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_TUSS_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msExamsTuss.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_EXAMS_TUSS_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msStatesCities.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_STATES_CITIES_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msStatesCities.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_STATES_CITIES_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --set global.apps.intcad.msStorage.scale.min="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_STORAGE_SCALE_MIN ${HPA_DEFAULT_MIN})" \
+      --set global.apps.intcad.msStorage.scale.max="$(env_get ${ENV_UPPERCASE}_HPA_INTCAD_MS_STORAGE_SCALE_MAX ${HPA_DEFAULT_MAX})" \
+      --namespace="${KUBE_NAMESPACE}" \
+      "${NAME}" \
+      .devops/k8s/corekit/
+  }
+  # ==========================================================================
+  # persist_environment_url:
+  #   Persists environment url to a file.
+  # ==========================================================================
+  function persist_environment_url () {
+    echo "${CI_ENVIRONMENT_URL}" > environment_url.txt
+  }
+  # ==========================================================================
+  # delete:
+  #   Deletes a given helm deployment.
+  # ==========================================================================
+  function delete () {
+    TRACK="${1-stable}"
+
+    helm delete --purge "$(release_name ${TRACK})"
+  }
+  # ==========================================================================
+  # rollback:
+  #   Rollback to the previous release.
+  # ==========================================================================
+  function rollback () {
+    TRACK="${1-stable}"
+
+    helm rollback "$(release_name ${TRACK})" 0
+  }
+
+before_script:
+  - *pnpm
+  - *devops
+  - *helpers

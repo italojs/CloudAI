@@ -1,0 +1,14 @@
+.git/
+.idea/
+coverage/
+frontend/
+node_modules/
+packages/
+projects/
+.DS_Store
+.gitignore
+.nyc_output
+.pnpm-store
+*.log
+.envrc
+npm-debug.log*

@@ -1,0 +1,32 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: crop-image
+spec:
+  replicas: 2
+  revisionHistoryLimit: 4
+  progressDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        app: crop-image
+    spec:
+      containers:
+        - name: app-containner
+          image: italojs/AI-Cloud/projects/backend/micro-services/crop-image:latest
+          ports:
+            - name: crop-image-port
+              containerPort: 30001
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: crop-image
+spec:
+  type: LoadBalancer
+  selector:
+    app: crop-image
+  ports:
+    - name:  crop-image-port
+      port: 3001
+      targetPort: 3001

@@ -1,0 +1,5 @@
+packages:
+  - 'packages/*'
+  - 'projects/*/backend/api'
+  - 'projects/*/backend/microservices/*'
+  - 'projects/*/backend/services/*'

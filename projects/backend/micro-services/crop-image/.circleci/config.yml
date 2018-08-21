@@ -1,0 +1,33 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: google/cloud-sdk:alpine
+    steps:
+      - checkout
+      - setup_docker_engine
+      - run:
+          name: Install tools
+          command: |
+            apk add -U openssl docker
+            cd /bin
+            wget -qO- https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kubectl > kubectl
+            chmod +x kubectl
+      - run:
+          name: Build Image
+          command: |
+            docker build -t italojs/AI-Cloud/projects/backend/micro-services/crop-image:build-$CIRCLE_BUILD_NUM .
+            docker tag italojs/AI-Cloud/projects/backend/micro-services/crop-image:build-$CIRCLE_BUILD_NUM italojs/AI-Cloud/projects/backend/micro-services/crop-image:latest
+      - run:
+          name: Push Image
+          command: |
+            docker login -u $DOCKER_USER -p $DOCKER_PASS
+            docker push italojs/AI-Cloud/projects/backend/micro-services/crop-image:build-$CIRCLE_BUILD_NUM
+            docker push italojs/AI-Cloud/projects/backend/micro-services/crop-image:latest
+      - run:
+          name: Deploy
+          command: | 
+            gcloud auth activate-service-account --key-file .circleci/kubernets-lab-2b21ff6453dd.json                           
+            gcloud config set project kubernets-lab-198222
+            gcloud container clusters get-credentials cluster-test --zone us-central1-a
+            kubectl apply -f run/manifest.yaml

@@ -1,0 +1,115 @@
+version: '3.3'
+
+services:
+  mongodb:
+    image: mvertes/alpine-mongo
+    ports:
+      - 27017:27017
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 256M
+    volumes:
+      - mongodb:/data/dbs
+  
+  vhost:
+    image: jwilder/nginx-proxy:alpine
+    ports:
+      - 80:80
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  minio:
+    image: minio/minio
+    entrypoint: sh
+    command: -c 'mkdir -p /export/cloud-storage-development && /usr/bin/minio server /export'
+    environment:
+      MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
+      MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      VIRTUAL_HOST: minio.127.0.0.1.xip.io
+    ports:
+      - 9000:9000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 256M
+    volumes:
+      - minio-data:/export
+      - minio-config:/root/.minio
+
+  deeptrace-api:
+    depends_on:
+      - mongodb
+    environment:
+      DEBUG: deeptrace:*
+      MONGODB_URL: mongodb://mongodb:27017/deeptrace
+      NODE_ENV: development
+      VIRTUAL_HOST: api.deep-trace.127.0.0.1.xip.io
+    image: deeptrace/api
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 128M
+
+  ms-cloud-storage:
+    build: projects/backend/micro-services/cloud-storage
+    depends_on:
+      - minio
+      - vhost
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 64M
+    environment:
+      DEBUG: appify:*,ms-cloud-storage:*
+      DEEPTRACE_DSN: http://deeptrace-api:3000/
+      DEEPTRACE_TIMEOUT: 3000
+      GIT_COMMIT: ${GIT_COMMIT}
+      GIT_RELEASE: ${GIT_RELEASE}
+      NODE_ENV: development
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_TIMEOUT: ${SENTRY_TIMEOUT}
+      STORAGE_BUCKET: cloud-storage-development
+      STORAGE_CREDENTIALS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+      STORAGE_CREDENTIALS_ENDPOINT: http://minio:9000/
+      STORAGE_CREDENTIALS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      STORAGE_SIGNED_URL_TTL: 10000
+      STORAGE_UPLOAD_FILE_SIZE: 52428800
+      VIRTUAL_HOST: ms-cloud-storage.cloudai.127.0.0.1.xip.io
+    ports:
+      - 3000:3000
+
+  public-api:
+    build: projects/backend/public-api
+    depends_on:
+      - mongodb
+      - vhost
+      - ms-cloud-storage
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    environment:
+      DEBUG: appify:*,public-api:*
+      DEEPTRACE_DSN: ${DEEPTRACE_DSN}
+      DEEPTRACE_TIMEOUT: ${DEEPTRACE_TIMEOUT}
+      DEFAULT_INTERNAL_REQUESTS_TIMEOUT: ${DEFAULT_INTERNAL_REQUESTS_TIMEOUT}
+      GIT_COMMIT: ${GIT_COMMIT}
+      GIT_RELEASE: ${GIT_RELEASE}
+      MONGODB_DBNAME: ${MONGODB_DBNAME:-intcad}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/intcad}
+      NODE_ENV: development
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_TIMEOUT: ${SENTRY_TIMEOUT}
+      CLOUD_STORAGE_URL: ms-cloud-storage.cloudai.127.0.0.1.xip.io
+      VIRTUAL_HOST: public-api.cloudai.127.0.0.1.xip.io
+
+volumes:
+  minio-config:
+  minio-data:
+  mongodb:

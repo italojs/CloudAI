@@ -1,0 +1,35 @@
+# ==============================================================================
+# Required environment variables
+# ==============================================================================
+
+# Value used as JWT's issuer grant:
+export AUTHORITY_ISSUER_URN="urn:authority:id:env:development"
+
+# Overrides microservice's default request timeout:
+export DEFAULT_INTERNAL_REQUESTS_TIMEOUT="5000"
+
+# SendGrid's settings:
+export EVENTS_CHALLENGE_REQUESTED_TEMPLATE_ID=
+export MAILER_SENDER_EMAIL=
+export MAILER_SENDER_NAME="Mantris ID"
+export SENDGRID_API_KEY=
+
+# ==============================================================================
+# Optional environment variables
+# ==============================================================================
+
+# Overriding admin profile information:
+# export ADMIN_PROFILE_BIRTHDATE="1970-01-01"
+# export ADMIN_PROFILE_DOCUMENTS_CPF="67351132500"
+# export ADMIN_PROFILE_NAME="Jane Doe"
+
+# Debugging and error report:
+# export DEEPTRACE_DSN=
+# export SENTRY_DSN=
+
+# Use a different mongodb instance on development environment:
+# export MONGODB_DBNAME=
+# export MONGODB_URI=
+
+# Default sessions' TTL:
+# export SESSION_TTL="1h"
